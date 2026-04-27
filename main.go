@@ -52,6 +52,9 @@ func resourceAjayjiPersona() *schema.Resource {
 		ReadContext:   resourcePersonaRead,
 		UpdateContext: resourcePersonaUpdate,
 		DeleteContext: resourcePersonaDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
@@ -84,6 +87,7 @@ func resourceAjayjiPersona() *schema.Resource {
 		},
 	}
 }
+
 
 func resourcePersonaCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*AjayjiClient)
@@ -276,6 +280,9 @@ func resourceAjayjiHuggingFaceCredential() *schema.Resource {
 		ReadContext:   resourceHFCredentialRead,
 		UpdateContext: resourceHFCredentialUpdate,
 		DeleteContext: resourceHFCredentialDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
