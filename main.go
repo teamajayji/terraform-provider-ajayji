@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"net/http"
-	"time"
 	"os"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
 )
+
 
 func main() {
 	plugin.Serve(&plugin.ServeOpts{
@@ -143,13 +145,13 @@ func resourcePersonaUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	id := d.Id()
 
 	payload := PersonaPayload{
-		Name:         d.Get("name").(string),
-		Model:        d.Get("model").(string),
-		SystemPrompt: d.Get("system_prompt").(string),
-		InputTopic:   d.Get("input_topic").(string),
-		OutputTopic:  d.Get("output_topic").(string),
-		InputScript:  d.Get("input_script").(string),
-		OutputScript: d.Get("output_script").(string),
+		Name:           d.Get("name").(string),
+		Model:          d.Get("model").(string),
+		SystemPrompt:   d.Get("system_prompt").(string),
+		InputTopic:     d.Get("input_topic").(string),
+		OutputTopic:    d.Get("output_topic").(string),
+		InputParserId:  d.Get("input_parser_id").(string),
+		OutputParserId: d.Get("output_parser_id").(string),
 	}
 
 	_, err := client.UpdatePersona(id, payload)
