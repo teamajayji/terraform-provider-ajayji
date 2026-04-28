@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 	"time"
-
+	"os"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
@@ -23,9 +23,10 @@ func main() {
 					},
 				},
 				ResourcesMap: map[string]*schema.Resource{
-					"ajayji_persona": resourceAjayjiPersona(),
-					"ajayji_model":   resourceAjayjiModel(),
+					"ajayji_persona":                resourceAjayjiPersona(),
+					"ajayji_model":                  resourceAjayjiModel(),
 					"ajayji_huggingface_credential": resourceAjayjiHuggingFaceCredential(),
+					"ajayji_javascript_parser":      resourceAjayjiJavascriptParser(),
 				},
 				ConfigureContextFunc: providerConfigure,
 			}
@@ -76,11 +77,11 @@ func resourceAjayjiPersona() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"input_script": {
+			"input_parser_id": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"output_script": {
+			"output_parser_id": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
@@ -93,13 +94,13 @@ func resourcePersonaCreate(ctx context.Context, d *schema.ResourceData, m interf
 	client := m.(*AjayjiClient)
 
 	payload := PersonaPayload{
-		Name:         d.Get("name").(string),
-		Model:        d.Get("model").(string),
-		SystemPrompt: d.Get("system_prompt").(string),
-		InputTopic:   d.Get("input_topic").(string),
-		OutputTopic:  d.Get("output_topic").(string),
-		InputScript:  d.Get("input_script").(string),
-		OutputScript: d.Get("output_script").(string),
+		Name:           d.Get("name").(string),
+		Model:          d.Get("model").(string),
+		SystemPrompt:   d.Get("system_prompt").(string),
+		InputTopic:     d.Get("input_topic").(string),
+		OutputTopic:    d.Get("output_topic").(string),
+		InputParserId:  d.Get("input_parser_id").(string),
+		OutputParserId: d.Get("output_parser_id").(string),
 	}
 
 	created, err := client.CreatePersona(payload)
@@ -131,8 +132,8 @@ func resourcePersonaRead(ctx context.Context, d *schema.ResourceData, m interfac
 	d.Set("system_prompt", persona.SystemPrompt)
 	d.Set("input_topic", persona.InputTopic)
 	d.Set("output_topic", persona.OutputTopic)
-	d.Set("input_script", persona.InputScript)
-	d.Set("output_script", persona.OutputScript)
+	d.Set("input_parser_id", persona.InputParserId)
+	d.Set("output_parser_id", persona.OutputParserId)
 
 	return nil
 }
@@ -356,6 +357,129 @@ func resourceHFCredentialDelete(ctx context.Context, d *schema.ResourceData, m i
 	id := d.Id()
 
 	err := client.DeleteHuggingFaceConfig(id)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+	return nil
+}
+
+
+// --- Javascript Parser Resource ---
+
+func resourceAjayjiJavascriptParser() *schema.Resource {
+	return &schema.Resource{
+		CreateContext: resourceJavascriptParserCreate,
+		ReadContext:   resourceJavascriptParserRead,
+		UpdateContext: resourceJavascriptParserUpdate,
+		DeleteContext: resourceJavascriptParserDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+		Schema: map[string]*schema.Schema{
+			"name": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"file_path": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"script": {
+				Type:     schema.TypeString,
+				Computed: true, // Terraform will compute this by reading the file, or the daemon returns it
+			},
+		},
+	}
+}
+
+// Helper to read script from local file
+func readScriptFromFile(path string) (string, error) {
+	// import "os"
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+func resourceJavascriptParserCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+
+	filePath := d.Get("file_path").(string)
+	// import "os"
+	scriptContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return diag.Errorf("Failed to read Javascript file at %s: %s", filePath, err)
+	}
+
+	payload := JavascriptParserPayload{
+		Name:     d.Get("name").(string),
+		Script:   string(scriptContent),
+		FilePath: filePath,
+	}
+
+	created, apiErr := client.CreateJavascriptParser(payload)
+	if apiErr != nil {
+		return diag.FromErr(apiErr)
+	}
+
+	d.SetId(created.ID)
+	return resourceJavascriptParserRead(ctx, d, m)
+}
+
+func resourceJavascriptParserRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+	id := d.Id()
+
+	parser, err := client.GetJavascriptParser(id)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if parser == nil {
+		d.SetId("") // Drift detection
+		return nil
+	}
+
+	d.Set("name", parser.Name)
+	d.Set("script", parser.Script)
+	d.Set("file_path", parser.FilePath)
+
+	return nil
+}
+
+func resourceJavascriptParserUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+	id := d.Id()
+
+	filePath := d.Get("file_path").(string)
+	// import "os"
+	scriptContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return diag.Errorf("Failed to read Javascript file at %s: %s", filePath, err)
+	}
+
+	payload := JavascriptParserPayload{
+		Name:     d.Get("name").(string),
+		Script:   string(scriptContent),
+		FilePath: filePath,
+	}
+
+	_, apiErr := client.UpdateJavascriptParser(id, payload)
+	if apiErr != nil {
+		return diag.FromErr(apiErr)
+	}
+
+	return resourceJavascriptParserRead(ctx, d, m)
+}
+
+func resourceJavascriptParserDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+	id := d.Id()
+
+	err := client.DeleteJavascriptParser(id)
 	if err != nil {
 		return diag.FromErr(err)
 	}

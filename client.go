@@ -13,14 +13,21 @@ type AjayjiClient struct {
 }
 
 type PersonaPayload struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name"`
-	Model        string `json:"model"`
-	SystemPrompt string `json:"system_prompt,omitempty"`
-	InputTopic   string `json:"input_topic,omitempty"`
-	OutputTopic  string `json:"output_topic,omitempty"`
-	InputScript  string `json:"input_script,omitempty"`
-	OutputScript string `json:"output_script,omitempty"`
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name"`
+	Model          string `json:"model"`
+	SystemPrompt   string `json:"system_prompt,omitempty"`
+	InputTopic     string `json:"input_topic,omitempty"`
+	OutputTopic    string `json:"output_topic,omitempty"`
+	InputParserId  string `json:"input_parser_id,omitempty"`
+	OutputParserId string `json:"output_parser_id,omitempty"`
+}
+
+type JavascriptParserPayload struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name"`
+	Script   string `json:"script"`
+	FilePath string `json:"file_path,omitempty"`
 }
 
 type HuggingFaceConfigPayload struct {
@@ -298,6 +305,98 @@ func (c *AjayjiClient) DeleteHuggingFaceConfig(id string) error {
 
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("failed to delete hf config, status code: %d", res.StatusCode)
+	}
+
+	return nil
+}
+
+// --- Javascript Parsers ---
+
+func (c *AjayjiClient) CreateJavascriptParser(payload JavascriptParserPayload) (*JavascriptParserPayload, error) {
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/parsers", c.Endpoint), bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to create parser, status code: %d", res.StatusCode)
+	}
+
+	var created JavascriptParserPayload
+	err = json.NewDecoder(res.Body).Decode(&created)
+	return &created, err
+}
+
+func (c *AjayjiClient) GetJavascriptParser(id string) (*JavascriptParserPayload, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/parsers/%s", c.Endpoint, id), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil, nil // Drift detection
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get parser, status code: %d", res.StatusCode)
+	}
+
+	var parser JavascriptParserPayload
+	err = json.NewDecoder(res.Body).Decode(&parser)
+	return &parser, err
+}
+
+func (c *AjayjiClient) UpdateJavascriptParser(id string, payload JavascriptParserPayload) (*JavascriptParserPayload, error) {
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/api/v1/parsers/%s", c.Endpoint, id), bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to update parser, status code: %d", res.StatusCode)
+	}
+
+	var updated JavascriptParserPayload
+	err = json.NewDecoder(res.Body).Decode(&updated)
+	return &updated, err
+}
+
+func (c *AjayjiClient) DeleteJavascriptParser(id string) error {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/parsers/%s", c.Endpoint, id), nil)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("failed to delete parser, status code: %d", res.StatusCode)
 	}
 
 	return nil
