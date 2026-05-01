@@ -29,6 +29,7 @@ func main() {
 					"ajayji_model":                  resourceAjayjiModel(),
 					"ajayji_huggingface_credential": resourceAjayjiHuggingFaceCredential(),
 					"ajayji_javascript_parser":      resourceAjayjiJavascriptParser(),
+					"ajayji_tool": resourceAjayjiTool(),
 				},
 				ConfigureContextFunc: providerConfigure,
 			}
@@ -87,6 +88,21 @@ func resourceAjayjiPersona() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
+			"tool_call_parser_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"tool_response_parser_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"tool_ids": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+			},
 		},
 	}
 }
@@ -95,14 +111,25 @@ func resourceAjayjiPersona() *schema.Resource {
 func resourcePersonaCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*AjayjiClient)
 
+// Convert tool_ids to []string
+	var toolIds []string
+	if v, ok := d.GetOk("tool_ids"); ok {
+		for _, toolId := range v.([]interface{}) {
+			toolIds = append(toolIds, toolId.(string))
+		}
+	}
+
 	payload := PersonaPayload{
-		Name:           d.Get("name").(string),
-		Model:          d.Get("model").(string),
-		SystemPrompt:   d.Get("system_prompt").(string),
-		InputTopic:     d.Get("input_topic").(string),
-		OutputTopic:    d.Get("output_topic").(string),
-		InputParserId:  d.Get("input_parser_id").(string),
-		OutputParserId: d.Get("output_parser_id").(string),
+		Name:                 d.Get("name").(string),
+		Model:                d.Get("model").(string),
+		SystemPrompt:         d.Get("system_prompt").(string),
+		InputTopic:           d.Get("input_topic").(string),
+		OutputTopic:          d.Get("output_topic").(string),
+		InputParserId:        d.Get("input_parser_id").(string),
+		OutputParserId:       d.Get("output_parser_id").(string),
+		ToolCallParserId:     d.Get("tool_call_parser_id").(string),
+		ToolResponseParserId: d.Get("tool_response_parser_id").(string),
+		ToolIds:              toolIds,
 	}
 
 	created, err := client.CreatePersona(payload)
@@ -129,13 +156,16 @@ func resourcePersonaRead(ctx context.Context, d *schema.ResourceData, m interfac
 		return nil
 	}
 
-	d.Set("name", persona.Name)
+d.Set("name", persona.Name)
 	d.Set("model", persona.Model)
 	d.Set("system_prompt", persona.SystemPrompt)
 	d.Set("input_topic", persona.InputTopic)
 	d.Set("output_topic", persona.OutputTopic)
 	d.Set("input_parser_id", persona.InputParserId)
 	d.Set("output_parser_id", persona.OutputParserId)
+	d.Set("tool_call_parser_id", persona.ToolCallParserId)
+	d.Set("tool_response_parser_id", persona.ToolResponseParserId)
+	d.Set("tool_ids", persona.ToolIds)
 
 	return nil
 }
@@ -144,14 +174,25 @@ func resourcePersonaUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	client := m.(*AjayjiClient)
 	id := d.Id()
 
+// Convert tool_ids to []string
+	var toolIds []string
+	if v, ok := d.GetOk("tool_ids"); ok {
+		for _, toolId := range v.([]interface{}) {
+			toolIds = append(toolIds, toolId.(string))
+		}
+	}
+
 	payload := PersonaPayload{
-		Name:           d.Get("name").(string),
-		Model:          d.Get("model").(string),
-		SystemPrompt:   d.Get("system_prompt").(string),
-		InputTopic:     d.Get("input_topic").(string),
-		OutputTopic:    d.Get("output_topic").(string),
-		InputParserId:  d.Get("input_parser_id").(string),
-		OutputParserId: d.Get("output_parser_id").(string),
+		Name:                 d.Get("name").(string),
+		Model:                d.Get("model").(string),
+		SystemPrompt:         d.Get("system_prompt").(string),
+		InputTopic:           d.Get("input_topic").(string),
+		OutputTopic:          d.Get("output_topic").(string),
+		InputParserId:        d.Get("input_parser_id").(string),
+		OutputParserId:       d.Get("output_parser_id").(string),
+		ToolCallParserId:     d.Get("tool_call_parser_id").(string),
+		ToolResponseParserId: d.Get("tool_response_parser_id").(string),
+		ToolIds:              toolIds,
 	}
 
 	_, err := client.UpdatePersona(id, payload)
@@ -482,6 +523,104 @@ func resourceJavascriptParserDelete(ctx context.Context, d *schema.ResourceData,
 	id := d.Id()
 
 	err := client.DeleteJavascriptParser(id)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+	return nil
+}
+
+// --- Ajayji Tool Resource ---
+
+func resourceAjayjiTool() *schema.Resource {
+	return &schema.Resource{
+		CreateContext: resourceToolCreate,
+		ReadContext:   resourceToolRead,
+		UpdateContext: resourceToolUpdate,
+		DeleteContext: resourceToolDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+		Schema: map[string]*schema.Schema{
+			"name": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"type": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"config_json": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
+		},
+	}
+}
+
+func resourceToolCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+
+	payload := ToolPayload{
+		Name:       d.Get("name").(string),
+		Type:       d.Get("type").(string),
+		ConfigJson: d.Get("config_json").(string),
+	}
+
+	created, err := client.CreateTool(payload)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId(created.ID)
+	return resourceToolRead(ctx, d, m)
+}
+
+func resourceToolRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+	id := d.Id()
+
+	tool, err := client.GetTool(id)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if tool == nil {
+		d.SetId("") // Drift detection
+		return nil
+	}
+
+	d.Set("name", tool.Name)
+	d.Set("type", tool.Type)
+	d.Set("config_json", tool.ConfigJson)
+
+	return nil
+}
+
+func resourceToolUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+	id := d.Id()
+
+	payload := ToolPayload{
+		Name:       d.Get("name").(string),
+		Type:       d.Get("type").(string),
+		ConfigJson: d.Get("config_json").(string),
+	}
+
+	_, err := client.UpdateTool(id, payload)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return resourceToolRead(ctx, d, m)
+}
+
+func resourceToolDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*AjayjiClient)
+	id := d.Id()
+
+	err := client.DeleteTool(id)
 	if err != nil {
 		return diag.FromErr(err)
 	}

@@ -13,14 +13,24 @@ type AjayjiClient struct {
 }
 
 type PersonaPayload struct {
-	ID             string `json:"id,omitempty"`
-	Name           string `json:"name"`
-	Model          string `json:"model"`
-	SystemPrompt   string `json:"system_prompt,omitempty"`
-	InputTopic     string `json:"input_topic,omitempty"`
-	OutputTopic    string `json:"output_topic,omitempty"`
-	InputParserId  string `json:"input_parser_id,omitempty"`
-	OutputParserId string `json:"output_parser_id,omitempty"`
+	ID                   string   `json:"id,omitempty"`
+	Name                 string   `json:"name"`
+	Model                string   `json:"model"`
+	SystemPrompt         string   `json:"system_prompt,omitempty"`
+	InputTopic           string   `json:"input_topic,omitempty"`
+	OutputTopic          string   `json:"output_topic,omitempty"`
+	InputParserId        string   `json:"input_parser_id,omitempty"`
+	OutputParserId       string   `json:"output_parser_id,omitempty"`
+	ToolCallParserId     string   `json:"tool_call_parser_id,omitempty"`
+	ToolResponseParserId string   `json:"tool_response_parser_id,omitempty"`
+	ToolIds              []string `json:"tool_ids,omitempty"`
+}
+
+type ToolPayload struct {
+	ID         string `json:"id,omitempty"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	ConfigJson string `json:"config_json"`
 }
 
 type JavascriptParserPayload struct {
@@ -397,6 +407,98 @@ func (c *AjayjiClient) DeleteJavascriptParser(id string) error {
 
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("failed to delete parser, status code: %d", res.StatusCode)
+	}
+
+	return nil
+}
+
+// --- Tools ---
+
+func (c *AjayjiClient) CreateTool(payload ToolPayload) (*ToolPayload, error) {
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/tools", c.Endpoint), bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to create tool, status code: %d", res.StatusCode)
+	}
+
+	var created ToolPayload
+	err = json.NewDecoder(res.Body).Decode(&created)
+	return &created, err
+}
+
+func (c *AjayjiClient) GetTool(id string) (*ToolPayload, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/tools/%s", c.Endpoint, id), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil, nil // Drift detection
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get tool, status code: %d", res.StatusCode)
+	}
+
+	var tool ToolPayload
+	err = json.NewDecoder(res.Body).Decode(&tool)
+	return &tool, err
+}
+
+func (c *AjayjiClient) UpdateTool(id string, payload ToolPayload) (*ToolPayload, error) {
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/api/v1/tools/%s", c.Endpoint, id), bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to update tool, status code: %d", res.StatusCode)
+	}
+
+	var updated ToolPayload
+	err = json.NewDecoder(res.Body).Decode(&updated)
+	return &updated, err
+}
+
+func (c *AjayjiClient) DeleteTool(id string) error {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/tools/%s", c.Endpoint, id), nil)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("failed to delete tool, status code: %d", res.StatusCode)
 	}
 
 	return nil
